@@ -1,0 +1,72 @@
+{
+  "ProfileMigrationEngine": "USMT",
+  "UserPrincipalName": "user@contoso.onmicrosoft.com",
+  "SourceUserSID": null,
+  "BackupRoot": "D:\\UserBackups",
+  "USMT": {
+    "DownloadUrl": "https://aka.ms/USMT",
+    "MigDocsXml": "built-in",
+    "MigAppXml": "built-in",
+    "AdditionalInclude": [
+      "%USERPROFILE%\\Favorites",
+      "%USERPROFILE%\\Links",
+      "%USERPROFILE%\\Searches"
+    ],
+    "AdditionalExclude": [
+      "**\\node_modules\\**",
+      "**\\*.log",
+      "**\\temp\\**"
+    ]
+  },
+  "ForensiT": {
+    "Enabled": false,
+    "ProfwizPath": "C:\\Tools\\ForensiT\\Profwiz.exe",
+    "LicenseKey": null
+  },
+  "Backup": {
+    "IncludePaths": [
+      "%USERPROFILE%\\Desktop",
+      "%USERPROFILE%\\Documents",
+      "%USERPROFILE%\\Downloads",
+      "%USERPROFILE%\\Pictures",
+      "%USERPROFILE%\\Videos",
+      "%USERPROFILE%\\Music",
+      "%USERPROFILE%\\AppData\\Roaming",
+      "%USERPROFILE%\\AppData\\Local"
+    ],
+    "ExcludeGlobs": [
+      "**\\Temp\\**",
+      "**\\Cache\\**",
+      "**\\node_modules\\**",
+      "**\\*.tmp",
+      "**\\*.temp"
+    ],
+    "VSS": true
+  },
+  "Safeguards": {
+    "MinFreeDiskGB": 20,
+    "RequireACPower": true,
+    "BlockIfBatteryBelowPercent": 30,
+    "RequireNetwork": true
+  },
+  "BitLocker": {
+    "ExportRecoveryKey": true,
+    "ExportDir": "artifacts/BitLocker",
+    "AlsoTryAzureKeyBackupCmdlets": false
+  },
+  "Domain": {
+    "LeaveDomain": true,
+    "CreateTempLocalAdmin": true,
+    "TempLocalAdminName": "MigAdmin",
+    "TempLocalAdminPassSecretRef": "env:MIGADMIN_PASS"
+  },
+  "AADJoin": {
+    "Mode": "GuidedManual",
+    "ShowSettingsDeepLink": true
+  },
+  "Logging": {
+    "LogDir": "logs",
+    "Verbose": true
+  },
+  "DryRun": false
+}

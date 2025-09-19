@@ -1,0 +1,270 @@
+{
+  "name": "BlueShift",
+  "version": "1.0.0",
+  "owner": "IT-Engineering",
+  "goal": "Build a no-wipe migration tool for Windows 10/11 devices to move from Hybrid AD Join to Azure AD Join (cloud-only) without Intune, preserving user data, apps, and profile.",
+  "constraints": [
+    "No Intune or Autopilot available.",
+    "Must preserve user profile data and installed apps.",
+    "No device reimage or reset.",
+    "Minimal downtime; per-device hands-on is acceptable.",
+    "Support Windows 10 21H2+ and Windows 11 22H2+."
+  ],
+  "success_criteria": [
+    "Profile appears intact after migration (Desktop/Documents/AppData retained).",
+    "User can sign in with Azure AD credentials and retains app settings.",
+    "BitLocker recovery info preserved and accessible.",
+    "Repeatable: produces logs/artifacts and supports dry-run.",
+    "Rollback path available if AAD Join fails."
+  ],
+  "deliverables": {
+    "repo_layout": [
+      "README.md",
+      "LICENSE",
+      "scripts/Install-USMT.ps1",
+      "scripts/Migrate-Profile-Using-USMT.ps1",
+      "scripts/Migrate-Profile-Using-ForensiT.ps1",
+      "scripts/Preflight-Checks.ps1",
+      "scripts/Backup-UserData.ps1",
+      "scripts/Export-BitLockerKey.ps1",
+      "scripts/Leave-Domain.ps1",
+      "scripts/Guide-AzureADJoin.ps1",
+      "scripts/PostJoin-Tasks.ps1",
+      "scripts/Rollback-Restore.ps1",
+      "modules/MigHelper/MigHelper.psm1",
+      "gui/MigHelper.GUI.ps1",
+      "config/migration.json",
+      "logs/.gitkeep",
+      "artifacts/.gitkeep"
+    ],
+    "packaging": "Create a signed PowerShell module and an optional single-file packaged script via PS2EXE or PowerShell 7 pwsh self-contained bundle.",
+    "runner": "Main entry: gui/MigHelper.GUI.ps1 (GUI) or modules/MigHelper/MigHelper.psm1 + a Start-Migration.ps1 (CLI)."
+  },
+  "user_prompts": {
+    "locale": "id-ID",
+    "strings": {
+      "preflight_ok": "✅ Pemeriksaan awal lulus. Siap migrasi.",
+      "preflight_warn": "⚠️ Ada peringatan. Lihat log untuk detail.",
+      "preflight_fail": "❌ Pemeriksaan awal gagal. Hentikan dan perbaiki dahulu.",
+      "backup_progress": "🔄 Membackup profil & data pengguna...",
+      "backup_done": "✅ Backup selesai.",
+      "bitlocker_saved": "🔐 Kunci pemulihan BitLocker diekspor.",
+      "ready_unjoin": "🧩 Siap lepas dari domain on-prem.",
+      "aad_join_instructions": "🪪 Langkah manual diperlukan: Buka Settings > Accounts > Access work or school > Connect > Join this device to Azure Active Directory. Masuk dengan akun AAD pengguna, lalu restart.",
+      "mapping_profile": "👤 Melakukan pemetaan profil ke akun AAD...",
+      "mapping_done": "✅ Profil berhasil dipetakan.",
+      "post_done": "🎉 Migrasi selesai. Silakan login dengan akun Azure AD.",
+      "rollback_start": "↩️ Memulai rollback ke kondisi sebelum migrasi...",
+      "rollback_done": "✅ Rollback selesai."
+    }
+  },
+  "inputs": {
+    "config_file": "config/migration.json",
+    "config_schema": {
+      "ProfileMigrationEngine": "USMT | ForensiT",
+      "UserPrincipalName": "string (UPN Azure AD target)",
+      "SourceUserSID": "optional string (auto-detected if omitted)",
+      "BackupRoot": "path (e.g., D:\\UserBackups)",
+      "USMT": {
+        "DownloadUrl": "https://aka.ms/USMT (placeholder - use ADK installer)",
+        "MigDocsXml": "built-in",
+        "MigAppXml": "built-in",
+        "AdditionalInclude": ["paths/globs to include"],
+        "AdditionalExclude": ["paths/globs to exclude"]
+      },
+      "ForensiT": {
+        "Enabled": false,
+        "ProfwizPath": "C:\\Tools\\ForensiT\\Profwiz.exe",
+        "LicenseKey": "optional"
+      },
+      "Backup": {
+        "IncludePaths": [
+          "%USERPROFILE%\\Desktop",
+          "%USERPROFILE%\\Documents",
+          "%USERPROFILE%\\Downloads",
+          "%USERPROFILE%\\Pictures",
+          "%USERPROFILE%\\AppData\\Roaming",
+          "%USERPROFILE%\\AppData\\Local"
+        ],
+        "ExcludeGlobs": ["**\\Temp\\**", "**\\Cache\\**"],
+        "VSS": true
+      },
+      "Safeguards": {
+        "MinFreeDiskGB": 20,
+        "RequireACPower": true,
+        "BlockIfBatteryBelowPercent": 30,
+        "RequireNetwork": true
+      },
+      "BitLocker": {
+        "ExportRecoveryKey": true,
+        "ExportDir": "artifacts/BitLocker",
+        "AlsoTryAzureKeyBackupCmdlets": false
+      },
+      "Domain": {
+        "LeaveDomain": true,
+        "CreateTempLocalAdmin": true,
+        "TempLocalAdminName": "MigAdmin",
+        "TempLocalAdminPassSecretRef": "env:MIGADMIN_PASS"
+      },
+      "AADJoin": {
+        "Mode": "GuidedManual",
+        "ShowSettingsDeepLink": true
+      },
+      "Logging": {
+        "LogDir": "logs",
+        "Verbose": true
+      },
+      "DryRun": false
+    }
+  },
+  "architecture": {
+    "language": "PowerShell 5.1+/7",
+    "elevation": "Requires admin",
+    "modules": [
+      "Microsoft.PowerShell.LocalAccounts",
+      "BitLocker",
+      "DSRegCmd (invoked)",
+      "WMI/CIM",
+      "ScheduledTasks"
+    ],
+    "components": [
+      "Preflight: hardware, power, disk, network, domain state, AAD state, BitLocker state",
+      "Backup: robocopy + VSS snapshot (optional)",
+      "USMT orchestrator: ScanState/LoadState with safe switches",
+      "ForensiT orchestrator (optional)",
+      "Domain Leave: netdom/Unjoin-Computer + temp local admin creation",
+      "AAD Join guidance: launch ms-settings:workplace with instructions and detection loop",
+      "Profile mapping: USMT LoadState or ForensiT SID rebind",
+      "Post-join fixes: default apps, file associations, OneDrive sign-in prompt, Teams/Office cache heal",
+      "Rollback: restore backup, revert domain (if feasible), remove temp admin"
+    ]
+  },
+  "high_level_flow": [
+    "Run Preflight-Checks.ps1; block if risks detected.",
+    "Export-BitLockerKey.ps1 (if enabled).",
+    "Backup-UserData.ps1 (fast, resumable robocopy + optional VSS).",
+    "Install-USMT.ps1 (download ADK components or validate presence).",
+    "If ProfileMigrationEngine=USMT: run ScanState.",
+    "If ProfileMigrationEngine=ForensiT: prep Profwiz options.",
+    "Leave-Domain.ps1 (create temp local admin, unjoin, and schedule post-reboot continuation).",
+    "Guide-AzureADJoin.ps1 (open Settings deep link, wait for dsregcmd /status to show AzureAdJoined=YES, then continue).",
+    "If USMT: run LoadState to target Azure AD account; If ForensiT: run Profwiz to rebind profile.",
+    "PostJoin-Tasks.ps1 (Edge/Office/Teams cache touch-up, OneDrive Known Folder Move prompt, reapply printers if any).",
+    "Finalize: logs, artifact manifest, success summary.",
+    "If failure at any stage: trigger Rollback-Restore.ps1 as appropriate."
+  ],
+  "key_commands": {
+    "detect_states": [
+      "dsregcmd /status",
+      "whoami /all",
+      "Get-ComputerInfo | Select-Object CsDomain, OsName, WindowsVersion",
+      "Get-BitLockerVolume"
+    ],
+    "backup": [
+      "robocopy \"C:\\Users\\%USERNAME%\" \"<BackupRoot>\\%USERNAME%\" /MIR /R:2 /W:2 /SL /XJ /XD Temp Cache /LOG+:logs\\robocopy.log"
+    ],
+    "usmt": [
+      "ScanState.exe C:\\USMTStore /o /c /v:13 /uel:0 /ui:%USERDOMAIN%\\%USERNAME% /i:MigDocs.xml /i:MigApp.xml /offlineWinDir:C:\\Windows",
+      "LoadState.exe C:\\USMTStore /c /v:13 /lac /lae /i:MigDocs.xml /i:MigApp.xml /ui:<AAD_UPN>"
+    ],
+    "forensit": [
+      "Profwiz.exe /local /profilepath \"C:\\Users\\<OldProfile>\" /user \"AzureAD\\<AAD_UPN>\" /quiet /log \"logs\\forensit.log\""
+    ],
+    "domain_leave": [
+      "net user MigAdmin <TempPassword> /add",
+      "net localgroup Administrators MigAdmin /add",
+      "wmic computersystem where name=\"%COMPUTERNAME%\" call unjoindomainorworkgroup FUnjoinOptions=0"
+    ],
+    "open_settings_deeplink": [
+      "start ms-settings:workplace"
+    ]
+  },
+  "safeguards": [
+    "Preflight blocks if free disk < MinFreeDiskGB.",
+    "Block on battery below threshold or AC not connected.",
+    "Detect and pause if VPN/EDR/Firewall policies may break AAD Join; require override flag.",
+    "Hash and size manifest for backup to validate completeness.",
+    "Encrypt backup at rest using EFS or 7z with password (optional)."
+  ],
+  "telemetry": {
+    "local_logs": "All steps log to logs/*.log with timestamps.",
+    "json_manifest": "artifacts/migration-manifest.json summarizing actions, versions, and outcomes.",
+    "pii_policy": "No profile data in logs; only counts and hashed identifiers."
+  },
+  "rollback": {
+    "triggers": [
+      "AAD Join not completed within 30 minutes.",
+      "USMT LoadState failed.",
+      "User cannot sign in to Azure AD after 2 attempts."
+    ],
+    "actions": [
+      "Restore robocopy backup to original profile path.",
+      "If domain controllers reachable and credentials available, attempt rejoin to domain.",
+      "Remove temp local admin and secure artifacts.",
+      "Generate rollback report."
+    ]
+  },
+  "security": [
+    "Run elevated; verify Admin group membership.",
+    "Never log secrets or access tokens.",
+    "Temp local admin password must come from env var or secure prompt.",
+    "Optionally rotate local admin password at end.",
+    "Clean up USMT stores containing user data after success."
+  ],
+  "testing": {
+    "scenarios": [
+      "Device with BitLocker ON.",
+      "Low disk space (<20GB).",
+      "User profile >50GB (large PSTs).",
+      "USMT success path.",
+      "ForensiT success path.",
+      "AAD Join timeout and rollback.",
+      "Battery-only device."
+    ],
+    "acceptance": [
+      "Files in Desktop/Documents intact.",
+      "Outlook profile loads without reconfiguration (if same profile roaming).",
+      "Teams/OneDrive sign-in prompts appear and work.",
+      "No duplicate profile folders created."
+    ]
+  },
+  "tasks_for_agent": [
+    "Generate all scripts listed in deliverables with comments and idempotent behavior.",
+    "Implement Preflight-Checks.ps1 to validate safeguards and produce a clear summary.",
+    "Implement Install-USMT.ps1 to guide ADK/USMT install or verify binaries.",
+    "Implement Migrate-Profile-Using-USMT.ps1 orchestrating ScanState/LoadState with retry.",
+    "Implement optional Migrate-Profile-Using-ForensiT.ps1 to call Profwiz if enabled.",
+    "Implement Export-BitLockerKey.ps1 to save recovery info to artifacts folder.",
+    "Implement Leave-Domain.ps1 to create temp admin, unjoin, and schedule post-reboot continuation.",
+    "Implement Guide-AzureADJoin.ps1 to open settings deep link and poll dsregcmd /status until AzureAdJoined=YES.",
+    "Implement PostJoin-Tasks.ps1 for cleanups and app cache touches.",
+    "Implement Rollback-Restore.ps1.",
+    "Provide Start-Migration.ps1 (CLI) that chains the full flow with -DryRun support.",
+    "Provide gui/MigHelper.GUI.ps1 (WPF) offering buttons for each stage and a guided mode.",
+    "Create README.md with screenshots and step-by-step (EN + ID).",
+    "Add code-signing instructions and sample self-signed cert usage for enterprise deployment."
+  ],
+  "usage_guide": {
+    "prereqs": [
+      "Run as local Administrator.",
+      "Have Azure AD user UPN and password.",
+      "Ensure network to Azure AD endpoints allowed.",
+      "If using ForensiT, place Profwiz.exe and license as configured."
+    ],
+    "quickstart_cli": [
+      "git clone <repo>",
+      "Set-ExecutionPolicy Bypass -Scope Process -Force",
+      "$env:MIGADMIN_PASS = \"S3cure!TempPass\"",
+      ".\\Start-Migration.ps1 -Config .\\config\\migration.json -Verbose"
+    ],
+    "quickstart_gui": [
+      "Right-click gui/MigHelper.GUI.ps1 > Run with PowerShell",
+      "Follow on-screen steps (ID: panduan berbahasa Indonesia tersedia)."
+    ]
+  },
+  "notes": [
+    "Azure AD Join on an already-running device is an interactive Settings flow by design. The tool automates everything around it and pauses for that manual step.",
+    "Prefer USMT for licensing simplicity; ForensiT is supported if you own a license and want faster SID rebind.",
+    "Consider enabling OneDrive Known Folder Move post-migration for ongoing data safety."
+  ]
+}
