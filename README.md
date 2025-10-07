@@ -37,7 +37,22 @@
 
 ## 🚀 Quick Start
 
-### 1. Download and Setup
+### Option 1: Guided Setup (Recommended)
+```powershell
+# Run the setup wizard (requires administrator privileges)
+.\scripts\Setup-Wizard.ps1
+```
+
+The setup wizard will guide you through:
+- PowerShell execution policy configuration
+- Required module installation
+- Environment variable setup
+- Shortcut creation
+- System validation
+
+### Option 2: Manual Setup
+
+#### 1. Download and Setup
 ```bash
 # Clone or download the BlueShift repository
 git clone <repository-url>
@@ -47,7 +62,7 @@ cd BlueShift
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
-### 2. Configure Migration Settings
+#### 2. Configure Migration Settings
 Edit `config/migration.json` to match your environment:
 ```json
 {
@@ -62,13 +77,13 @@ Edit `config/migration.json` to match your environment:
 }
 ```
 
-### 3. Set Environment Variables
+#### 3. Set Environment Variables
 ```powershell
 # Set temporary admin password (required for domain leave)
 $env:MIGADMIN_PASS = "YourSecureTempPassword123!"
 ```
 
-### 4. Run Migration
+#### 4. Run Migration
 ```powershell
 # CLI Mode (Recommended)
 .\Start-Migration.ps1 -ConfigPath .\config\migration.json
@@ -173,8 +188,70 @@ Optional environment variables:
 
 ### Phase 4: Cleanup
 8. **Post-Join Tasks**: Application and cache cleanup
-9. **Verification**: Confirm successful migration
-10. **Rollback (if needed)**: Restore to previous state
+9. **Data Restore**: Restore user data from backup
+10. **Verification**: Confirm successful migration and data integrity
+11. **Rollback (if needed)**: Restore to previous state
+
+## 💾 Backup & Restore
+
+BlueShift provides comprehensive backup and restore capabilities to ensure no data loss during migration.
+
+### Pre-Migration Backup
+
+The backup process creates a complete copy of user data before migration:
+
+```powershell
+# Run backup manually
+.\scripts\Backup-UserData.ps1 -ConfigPath .\config\migration.json
+
+# Dry-run mode for testing
+.\scripts\Backup-UserData.ps1 -ConfigPath .\config\migration.json -DryRun
+```
+
+**What gets backed up:**
+- Desktop files and folders
+- Documents
+- Downloads
+- Pictures, Videos, Music
+- Application data (AppData\Local and AppData\Roaming)
+- User profile settings and preferences
+
+**Backup features:**
+- Uses robocopy for reliable file copying
+- Supports include/exclude patterns
+- Creates backup manifest for verification
+- Comprehensive logging
+- Dry-run mode for testing
+
+### Post-Migration Restore
+
+After successful Azure AD join, restore user data:
+
+```powershell
+# Full restore (recommended)
+.\scripts\Restore-UserData.ps1 -ConfigPath .\config\migration.json
+
+# Selective restore (choose specific folders)
+.\scripts\Restore-UserData.ps1 -ConfigPath .\config\migration.json -RestoreMode Selective
+
+# Dry-run mode for testing
+.\scripts\Restore-UserData.ps1 -ConfigPath .\config\migration.json -DryRun
+
+# Force restore despite integrity issues
+.\scripts\Restore-UserData.ps1 -ConfigPath .\config\migration.json -Force
+```
+
+**Restore modes:**
+- **Full**: Restores all user data
+- **Selective**: Interactive selection of folders to restore
+- **VerifyOnly**: Validates backup integrity without restoring
+
+**Restore features:**
+- Backup integrity verification
+- Detailed progress reporting
+- Selective restore options
+- Comprehensive error handling
+- Restore manifest creation
 
 ## 🛡️ Safety & Rollback
 
